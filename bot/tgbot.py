@@ -121,8 +121,8 @@ def servicesCommand(update: Update, context):
     update.message.reply_text(data)
 
 def ReplLogsCommand(update: Update, context):
-    #data = terminalCommand('cat /var/log/postgresql/postgresql-15-main.log | grep "repl_user" | head -n 20')
-    data = terminalCommand('docker logs db | grep "replication" | head -n 20')
+    data = terminalCommand('cat /var/log/postgresql/postgresql-15-main.log | grep "repl_user" | head -n 20')
+    #data = terminalCommand('docker logs db | grep "replication" | head -n 20')
     update.message.reply_text(data)
 
 def selectData(table: str):
