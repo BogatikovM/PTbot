@@ -12,7 +12,7 @@ from psycopg2 import Error
 load_dotenv()
 
 TOKEN = os.getenv('TOKEN')
-host = os.getenv('HOST')
+host = os.getenv('RMHOST')
 port = os.getenv('PORT')
 username = os.getenv('HOSTUSER')
 password = os.getenv('PASSWORD')
