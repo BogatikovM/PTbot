@@ -1,0 +1,8 @@
+[main]
+mainHost ansible_host=192.168.226.149 ansible_user=ansible ansible_password=kali
+
+[db_repl]
+replHost ansible_host=192.168.226.132 ansible_user=ansible ansible_password=kali
+
+[db]
+dbHost ansible_host=192.168.226.131 ansible_user=ansible ansible_password=kali
