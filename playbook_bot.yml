@@ -1,0 +1,185 @@
+- name: tgBot
+  hosts: all
+  become: yes
+  vars:
+    db_name: postgres
+    db_repl_user: replicator
+    db_password: kali
+
+  tasks:
+  
+  - name: Install python and pip
+    apt: name={{ item }} state=latest
+    loop: ['python3', 'python3-pip']
+
+  - name: Install psycopg2
+    ansible.builtin.pip:
+      name: psycopg2-binary
+
+  - name: Install PSQL
+    when:
+      - inventory_hostname in groups['db']
+      - inventory_hostname in groups['db_repl']
+    apt: name={{ item }} state=latest
+    loop: ['postgresql', 'postgresql-contrib']
+
+  - name: Start PSQL
+    when:
+      - inventory_hostname in groups['db']
+      - inventory_hostname in groups['db_repl']
+    ansible.builtin.service:
+      name: postgresql
+      state: started
+
+  - name: Create DB
+    when: inventory_hostname in groups['db']
+    become: yes
+    become_user: postgres
+    postgresql_db:
+        state: present
+        name: "{{ db_name }}"
+
+  - name: Create db user
+    when: inventory_hostname in groups['db']
+    become: yes
+    become_user: postgres
+    postgresql_user:
+      name: "{{ db_repl_user }}"
+      password: "{{ db_password }}"
+      encrypted: true
+      role_attr_flags: replication
+  
+  - name: Create numbers table
+    when: inventory_hostname in groups['db']
+    become: yes
+    become_user: postgres
+    community.postgresql.postgresql_table:
+      name: numbers
+      columns:
+      - Number_id serial primary key
+      - Number varchar(30)
+
+  - name: Create emails table
+    when: inventory_hostname in groups['db']
+    become: yes
+    become_user: postgres
+    community.postgresql.postgresql_table:
+      name: emails
+      columns:
+      - Email_id serial primary key
+      - Email varchar(255)
+  
+  - name: Set wal_level=replica
+    when: inventory_hostname in groups['db']
+    become: yes
+    become_user: postgres
+    community.postgresql.postgresql_set:
+      name: wal_level
+      value: replica
+
+  - name: Set max_wal_senders=10
+    when: inventory_hostname in groups['db']
+    become: yes
+    become_user: postgres
+    community.postgresql.postgresql_set:
+      name: max_wal_senders
+      value: 10
+
+  - name: Set wal_log_hints=on
+    when: inventory_hostname in groups['db']
+    become: yes
+    become_user: postgres
+    community.postgresql.postgresql_set:
+      name: wal_log_hints
+      value: on
+
+  - name: Set archive_mode=on
+    when: inventory_hostname in groups['db']
+    become: yes
+    become_user: postgres
+    community.postgresql.postgresql_set:
+      name: archive_mode
+      value: on
+
+  - name: Set archive_command="cp %p /db/archive/%f"
+    when: inventory_hostname in groups['db']
+    become: yes
+    become_user: postgres
+    community.postgresql.postgresql_set:
+      name: archive_command
+      value: "cp %p /archive/%f"
+
+  - name: Set log_replication_commands=on
+    when: inventory_hostname in groups['db']
+    become: yes
+    become_user: postgres
+    community.postgresql.postgresql_set:
+      name: log_replication_commands
+      value: on
+  
+  - name: Add to pg_hba
+    when: inventory_hostname in groups['db']
+    become: yes
+    become_user: postgres
+    lineinfile:
+      state: present
+      dest: "/etc/postgresql/15/main/pg_hba.conf"
+      line: 'host replication replicator 192.168.226.132/24 trust'
+
+  - name: Set listen_address=*
+    when: inventory_hostname in groups['db_repl']
+    become: yes
+    become_user: postgres
+    community.postgresql.postgresql_set:
+      name: listen_addresses
+      value: '*'
+  
+  - name: Create a directory if it does not exist
+    when: inventory_hostname in groups['db']
+    ansible.builtin.file:
+      path: /archive
+      state: directory
+      mode: '0755'
+
+  - name: Create a directory if it does not exist
+    when: inventory_hostname in groups['main']
+    ansible.builtin.file:
+      path: /ansible
+      state: directory
+      mode: '0755'
+
+  - name: Install git
+    when: inventory_hostname in groups['main']
+    apt: name={{ item }} state=latest
+    loop: ['git']
+
+  - name: Get repo from github
+    when: inventory_hostname in groups['main']
+    ansible.builtin.git:
+      repo: https://github.com/BogatikovM/PTbot.git
+      dest: /ansible
+      single_branch: yes
+      version: ansible
+
+  - name: Install specified python requirements
+    when: inventory_hostname in groups['main']
+    #ansible.builtin.pip:
+      #name: "{{ item }}"
+      #loop: ['paramiko', 'python-telegram-bot==13.7', 'python-dotenv']
+    pip: name={{item}}
+    with_items:
+      - paramiko==3.4
+      - python-telegram-bot==13.7
+      - python-dotenv
+
+  - name: Copy file with owner and permissions
+    when: inventory_hostname in groups['main']
+    ansible.builtin.copy:
+      src: /home/maxim/ansible/.env
+      dest: /ansible/bot
+      mode: '0755'
+
+  - name: run bot
+    when: inventory_hostname in groups['main']
+    become: yes
+    ansible.builtin.raw: python3 /ansible/bot/tgbot.py
